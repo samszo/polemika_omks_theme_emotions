@@ -1,0 +1,12 @@
+<?php
+
+$translate = $this->plugin('translate');
+$item = $this->api()->read('items', 6564)->getContent();
+
+?>
+
+<h1><?php echo $item->displayTitle();?></h1>
+<p class="lead"><?php echo $item->displayDescription();?></p>
+<p class="lead">
+    <a href="<?php echo $site->siteUrl()."/page/rapports";?>" class="btn btn-lg btn-secondary fw-bold border-white bg-white">Commencer</a>
+</p>

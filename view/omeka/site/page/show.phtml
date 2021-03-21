@@ -1,0 +1,9 @@
+<?php
+$this->pageTitle($page->title(), 2);
+$showPagePagination = $this->siteSetting('show_page_pagination', true);
+?>
+
+<?php $this->trigger('view.show.before'); ?>
+<?php echo $this->partial('polemika/'.$page->slug(), ['site'=>$site]);?>
+<?php $this->trigger('view.show.after'); ?>
+

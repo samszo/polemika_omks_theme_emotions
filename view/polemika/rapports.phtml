@@ -1,0 +1,315 @@
+<?php
+    $user = $this->identity();
+
+    $site = $this->vars('site');
+    $nav = $site->publicNav();
+    $container = $nav->getContainer();
+    $activePage = $nav->findActive($container);
+    $flux = $activePage['page']->label;    
+    $translate = $this->plugin('translate');
+    $props = $this->pageProps();
+    $props['site']=$site;
+    $urls = $this->pageUrls($props,null,$flux);
+
+    //récupère l'action de la page
+    $item = $this->api()->read('items', 6564)->getContent();
+    $medias = $item->media();
+    
+    //récupère le crible de l'action
+    $oCrible = $item->value('jdc:hasCrible')->valueResource();
+    $cribleAction = $this->CribleFactory("",$oCrible);
+    //récupère le crible de la roue des émotions
+    $oCribleEmo = $this->api()->read('items', 7300)->getContent();
+    $cribleEmo = $this->CribleFactory("",$oCribleEmo);
+    
+
+    //création du processus lié à l'action
+    $dataProcess = ['rt'=>'Processus CartoAffect','actionApplication'=>$item];
+    $processus = $this->CartoAffectFactory(['user'=>$user,'view'=>$dataProcess]);
+
+
+    /*récupère les items de la collection
+    $oCollection = $item->value('schema:targetCollection')->valueResource();
+    $itemsCollection = $this->api()->search('items', ['item_set_id'=>$oCollection->id()])->getContent();
+    */
+?>
+
+<div class="container">
+  <div class="row">
+    <h8 id="actionDescription" style="margin-bottom: 4px;"><?php echo $item->displayDescription();?></h8>
+  </div>
+  <div class="row align-items-center">
+    <div class="col">
+      <div class="row">
+          <?php echo $this->partial('polemika/carousel', ['item'=>$item,'medias'=>$medias]);?>
+      </div>
+      <div id="txtItem" class="row">
+      </div>
+
+    </div>
+    <div class="col" id='colDroite'>
+      <div id='roueEmotion'></div>
+      <div id='evalRangeAll'>
+      <?php foreach($cribleAction['cribles'] as $i=>$c): ?>
+        <div class="row">
+        <h6>
+          <?php echo $c['item']->displayTitle();?>
+          <i id="spin_<?php echo $i;?>" style="display:none;" class="fas fa-cog fa-spin"></i>
+        </h6>
+        <div class="evalRange">        
+            <label class='lblRangeG' ><?php echo $c['concepts'][0]->displayTitle();?></label>
+            <input type="range" min="0" max="100" class="form-control-range" id="rr_<?php echo $i;?>">
+            <label class='lblRangeD' ><?php echo $c['concepts'][1]->displayTitle();?></label>
+        </div>                  
+        </div>                  
+      <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <button id="btnValid" style="margin-top: 4px;" type="button" class="btn btn-light btn-sm">SUIVANT</button>
+  </div>
+
+</div>
+
+
+<script>
+    let idCarto = 'range'
+    , actant = <?php echo $user ? json_encode(['id'=>$user->getId(),'nom'=>$user->getName()]) : '{"id":"6","nom":"anonyme"}';?>
+    
+    , criblesAction = <?php echo json_encode($cribleAction);?>
+    
+    , itemAction = <?php echo json_encode($item);?>
+    
+    , cribleEmo = <?php echo json_encode($cribleEmo);?>
+    
+    , medias = <?php echo json_encode($medias);?>
+    
+    , flux = '<?php echo $flux;?>', curAction = 0, curRep = 1, curItem = itemAction   
+    , urlAjoutRapports = '<?php echo $urls['ajoutRapport'];?>'
+    , urlAleaItem = '<?php echo $urls['aleaItem'];?>'
+    , urlCalculEmotions = '<?php echo $urls['calculEmotions'];?>'
+    , idProcess = <?php echo $processus->id();?>    
+    , histoDoc = [], roueEmo, emos = [], calculEmo
+    , geo = new Geo();
+
+    //récupère les identifiant des collections
+    let itemSet = [];
+    itemAction['schema:targetCollection'].forEach(c => {
+      itemSet.push(c.value_resource_id);
+    });
+    //définition des émotions
+    cribleEmo.concepts.forEach(e=>emos.push({'id':e['o:id'],'c':e["schema:color"][0]["@value"],'n':e['o:title'],'i':e["plmk:hasIcon"][0]["@value"]}))
+
+
+	  geo.getPosition(function(coords) {}); // just for ask the user for its approval when starting the app
+
+    //gestion des événements
+    d3.selectAll('.form-control-range').on('change',setPosi);
+    d3.select('#btnValid').on('click',nextAction);
+
+    //tests
+    idProcess = 7403;
+    getCalculEmotions();
+    showRoueEmotions();          
+    //
+
+    function nextAction(){
+      let description = "", repeatCount = itemAction['schema:repeatCount'][curAction]['@value']
+        , actionApplication = itemAction['schema:actionApplication'][curAction]['@value'];
+
+      //vérifie s'il faut passer à l'action suivante
+      if(curRep == repeatCount){
+        //passage aux actions suivantes
+        curAction ++;
+        curRep = 0;
+        curSlide = 0;
+        //récupère l'action en cours
+        actionApplication = itemAction['schema:actionApplication'][curAction]['@value'];
+        description = itemAction['dcterms:description'][curAction]['@value'];
+        //affiche l'action
+        d3.select('#actionDescription').text(description);
+      }else curRep ++;
+
+      switch (actionApplication) {
+        case 'getItemForEval':
+          clearEval();
+          getItemForEval();
+          break;     
+        case 'setCorItemEval':
+          getCalculEmotions();
+          showRoueEmotions();          
+          break;     
+        case 'showResult':
+          
+          break;     
+        default:
+          break;
+      }
+      
+    }
+
+    function getCalculEmotions(){
+      $.ajax({
+        type: 'GET',
+        dataType: 'json',
+        url: urlCalculEmotions+'&id='+idProcess
+        }).done(function(data) {
+          console.log(data);
+          calculEmo = data;
+          medias = [];
+          //construction des medias
+          calculEmo.docs.forEach(d=>medias = medias.concat(d.medias));
+          curItem = calculEmo.docs[0];
+          changeCarousel();
+          changeTexte();
+        })
+        .fail(function(e) {
+          console.log(e)
+      });      
+    }
+
+    function showRoueEmotions(){
+      if(!roueEmo){
+        d3.select('#evalRangeAll').style('display','none');
+        //roueEmo = new emotionsGeneva({'idCont':'roueEmotion'});
+        roueEmo = new emotionsGeneva({'idCont':'roueEmotion','emos':emos});
+      }
+      if(histoDoc.length){
+        let data = histoDoc[curRep];
+        curItem = data.item;
+        medias = data.medias;
+        changeCarousel();
+        changeTexte();
+      }
+    }
+    function clearEval(){            
+      criblesAction.cribles.forEach((d,i)=>{
+        document.getElementById('rr_'+i).value=50;
+      });
+    }
+    
+
+    function getItemForEval(){            
+      $.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: urlAleaItem,
+        data: {
+                'itemSet': itemSet
+        }
+        }).done(function(data) {
+          //console.log(data)
+          //enregistre l'historique des datas
+          histoDoc.push(data);
+          curItem = data.item;
+          medias = data.medias;
+          changeCarousel();
+          changeTexte();
+        })
+        .fail(function(e) {
+          console.log(e)
+      });
+    }
+
+    function changeTexte(){
+      d3.select('#txtItem').html(curItem["o:title"]);
+    }
+
+    function changeCarousel(){
+      let indicateurs = d3.select('.carousel-indicators').selectAll('button').data(medias);
+      indicateurs.exit().remove();
+      indicateurs.enter().append("button")
+        .attr("type","button")
+        .attr("data-bs-target","#carouselRapports")
+        .attr("data-bs-slide-to",(d,i)=>i)
+        .attr("class",(d,i)=>i==0 ? "active" : "")
+        .attr("aria-current",true)
+        .attr("aria-label",(d,i)=>"Image "+(i+1));
+
+      d3.select('.carousel-inner').selectAll('div').remove();  
+      let items = d3.select('.carousel-inner').selectAll('div').data(medias).enter().append("div")
+        .attr("class",(d,i)=>i==0 ? "carousel-item active" : "carousel-item");
+      items.append('img')
+        .attr("src",d=>d["o:thumbnail_urls"].large)
+        .attr("alt",d=>d["o:title"]=="null" ? d["o:title"] : "")
+        .attr("class","d-block w-100");
+      items.append('div')
+        .attr("src",d=>d["o:thumbnail_urls"].square)
+        .attr("alt",d=>d["o:title"])
+        .attr("class","carousel-caption d-none d-md-block")
+          .html(d=>"<p>"+d["o:title"]=="null" ? d["o:title"] : ""+"</p>");
+
+    }
+
+    function setPosi(e){
+      console.log(e);
+      let lat=0, lng=0, idC = e.target.id.substring(3);
+      //spinner pour patienter
+      d3.select('#spin_'+idC).style('display','inline');    
+      geo.getPosition(function(coords) {
+          if (coords) {
+              lat = coords.latitude;
+              lng = coords.longitude;
+          }
+
+          let val = e.target.value
+          , c = criblesAction.cribles[idC]
+          , ima = medias[curSlide]
+          , start = new Date()
+          , strDate = start.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });    
+          let omk = {
+              'dcterms:title':itemAction['o:title']+' _ '+curItem['o:title']+' _ '+c.item['o:title']+' : '+actant.nom+' '+strDate
+              ,'dcterms:isReferencedBy':itemAction['o:id']+'_'+curItem['o:id']+'_'+c.item['o:id']+'_'+ima['o:id']+' : '+start.valueOf()+' : '+actant.id
+              ,'jdc:creationDate':start
+              ,'ma:hasCreator':[{'type':'items','value':actant.id}]
+              ,'jdc:hasActant':[{'type':'items','value':actant.id}]
+              ,'schema:actionApplication':[{'type':'items','value':idProcess}]
+              ,'ma:hasRating':[]
+              ,'ma:isRatingOf':[]
+              ,'ma:ratingScaleMax':100
+              ,'ma:ratingScaleMin':0
+              ,'ma:hasRatingSystem':[{'type':'items','value':c.item['o:id']}]
+              ,'ma:locationLatitude':lat
+              ,'ma:locationLongitude':lng
+              ,'jdc:hasDoc':[{'type':'media','value':ima['o:id']},{'type':'items','value':curItem['o:id']}]
+              ,'jdc:distanceCenter':val
+              ,'jdc:hasConcept':[]
+              ,'jdc:distanceConcept':[]
+              ,'jdc:x':val
+              ,'jdc:y':0
+              ,'jdc:xRatingValue':val
+              ,'jdc:yRatingValue':0
+          };
+
+          c.concepts.forEach(function(c, i){
+              omk['ma:hasRating'].push(i==0 ? val : 100 - val);
+              omk['ma:isRatingOf'].push({'type':'items','value':c['o:id']});
+              omk['jdc:hasConcept'].push({'type':'items','value':c['o:id']});
+              omk['jdc:distanceConcept'].push(i==0 ? val : 100 - val);
+          })
+          let postData = {
+                      'json':true,
+                      'rt': 'Position sémantique : sonar',
+                      'rapports': omk
+              };
+          if(actant.id==6)
+            urlAjoutRapports+='&key_identity='+apiId+'&key_credential='+apiKey;
+          $.ajax({
+              type: 'POST',
+              dataType: 'json',
+              url: urlAjoutRapports,
+              data: postData,
+              }).done(function(data) {
+                d3.select('#spin_'+idC).style('display','none');    
+              })
+              .fail(function(e) {
+                      //throw new Error("Sauvegarde imposible : " + e);
+                      d3.select('#spin_'+idC).style('display','none');    
+              });
+      });
+
+    }
+
+</script>  
+<?php echo $this->partial('polemika/modal-wait');?>

@@ -1,0 +1,39 @@
+.bd-placeholder-img {
+    font-size: 1.125rem;
+    text-anchor: middle;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+  }
+
+  @media (min-width: 768px) {
+    .bd-placeholder-img-lg {
+      font-size: 3.5rem;
+    }
+  }
+
+.findTerm{
+    color:red;
+}
+
+div.tooltip {
+    position: absolute;
+    text-align: center;
+    padding: 2px;
+    font: 12px sans-serif;
+    background: lightsteelblue;
+    border: 0px;
+    border-radius: 8px;
+  }
+.evalRange{
+    display: flex;
+    justify-content: space-between;    
+}
+.lblRangeG{
+    color: white;
+    font: 12px sans-serif;
+}
+.lblRangeD{
+    color: white;
+    font: 12px sans-serif;  
+}

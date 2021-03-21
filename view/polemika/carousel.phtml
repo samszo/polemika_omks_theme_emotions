@@ -1,0 +1,36 @@
+<div id="carouselRapports" class="carousel slide" data-bs-ride="carousel">
+  <div class="carousel-indicators">
+    <?php foreach($medias as $i=>$m): ?>
+    <button type="button" data-bs-target="#carouselRapports" data-bs-slide-to="<?php echo $i; ?>" class="<?php echo $i==0 ? "active" : ""; ?>" aria-current="true" aria-label="<?php echo "Image ".($i+1); ?>"></button>
+    <?php endforeach; ?>
+  </div>
+
+  <div class="carousel-inner">
+  <?php foreach($medias as $i=>$m): ?>
+    <div class="carousel-item <?php echo $i==0 ? "active" : ""; ?>">
+      <img src="<?php echo $m->thumbnailUrl('square');?>" class="d-block w-100" alt="<?php echo $m->displayTitle();?>">
+      <div class="carousel-caption d-none d-md-block">
+        <!-- <h5><?php echo $item->displayTitle();?></h5>-->
+        <p><?php echo $m->displayTitle();?></p>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <button class="carousel-control-prev" type="button" data-bs-target="#carouselRapports"  data-bs-slide="prev">
+    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+    <span class="visually-hidden">Previous</span>
+  </button>
+  <button class="carousel-control-next" type="button" data-bs-target="#carouselRapports"  data-bs-slide="next">
+    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+    <span class="visually-hidden">Next</span>
+  </button>
+</div>
+<script>
+  let carouselRapports = document.getElementById('carouselRapports')
+  curSlide = 0;
+
+  carouselRapports.addEventListener('slide.bs.carousel', function (s) {
+    curSlide = s.from;
+  })    
+
+</script>
