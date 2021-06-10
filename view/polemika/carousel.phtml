@@ -31,6 +31,14 @@
 
   carouselRapports.addEventListener('slide.bs.carousel', function (s) {
     curSlide = s.from;
+    if(calculEmo){
+      curSlide = s.to;
+      afficheEmo();
+    }
+    if(actionApplication=='showResult'){
+      curSlide = s.to;
+      afficheResult();
+    }    
   })    
 
 </script>

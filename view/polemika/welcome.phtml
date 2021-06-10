@@ -1,7 +1,8 @@
 <?php
 
 $translate = $this->plugin('translate');
-$item = $this->api()->read('items', 6564)->getContent();
+$idAction = $this->themeSetting('item_action');
+$item = $this->api()->read('items', $idAction)->getContent();
 
 ?>
 

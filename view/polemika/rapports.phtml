@@ -12,14 +12,16 @@
     $urls = $this->pageUrls($props,null,$flux);
 
     //récupère l'action de la page
-    $item = $this->api()->read('items', 6564)->getContent();
+    $idAction = $this->themeSetting('item_action');
+    $item = $this->api()->read('items', $idAction)->getContent();
     $medias = $item->media();
     
     //récupère le crible de l'action
     $oCrible = $item->value('jdc:hasCrible')->valueResource();
     $cribleAction = $this->CribleFactory("",$oCrible);
     //récupère le crible de la roue des émotions
-    $oCribleEmo = $this->api()->read('items', 7300)->getContent();
+    $idCribleEmo = $this->themeSetting('item_cribleemo');
+    $oCribleEmo = $this->api()->read('items', $idCribleEmo)->getContent();
     $cribleEmo = $this->CribleFactory("",$oCribleEmo);
     
 
@@ -45,9 +47,9 @@
       </div>
       <div id="txtItem" class="row">
       </div>
-
     </div>
     <div class="col" id='colDroite'>
+      <div id='messageEnd' style='display:none'></div>
       <div id='roueEmotion'></div>
       <div id='evalRangeAll'>
       <?php foreach($cribleAction['cribles'] as $i=>$c): ?>
@@ -89,9 +91,13 @@
     , urlAjoutRapports = '<?php echo $urls['ajoutRapport'];?>'
     , urlAleaItem = '<?php echo $urls['aleaItem'];?>'
     , urlCalculEmotions = '<?php echo $urls['calculEmotions'];?>'
+    , urlResultEmotions = '<?php echo $urls['resultEmotions'];?>'    
+    , urlResultItems = '<?php echo $urls['resultItems'];?>'    
     , idProcess = <?php echo $processus->id();?>    
-    , histoDoc = [], roueEmo, emos = [], calculEmo
-    , geo = new Geo();
+    , titreProcess = '<?php echo $processus->displayTitle();?>' 
+    , histoDoc = [], roueEmo, emos = [], calculEmo, resultEmo
+    , geo = new Geo()
+    , targetResult, actionApplication;
 
     //récupère les identifiant des collections
     let itemSet = [];
@@ -108,15 +114,21 @@
     d3.selectAll('.form-control-range').on('change',setPosi);
     d3.select('#btnValid').on('click',nextAction);
 
-    //tests
+    /*tests
     idProcess = 7403;
-    getCalculEmotions();
-    showRoueEmotions();          
-    //
+    curAction = 1;
+    curRep = 4;
+    nextAction();    
+    //getCalculEmotions();
+    //showRoueEmotions();          
+    curAction = 3;
+    actionApplication='showResult';
+    getResultEmotions();
+    */
 
     function nextAction(){
-      let description = "", repeatCount = itemAction['schema:repeatCount'][curAction]['@value']
-        , actionApplication = itemAction['schema:actionApplication'][curAction]['@value'];
+      let description = "", repeatCount = itemAction['schema:repeatCount'][curAction]['@value'];
+      actionApplication = itemAction['schema:actionApplication'][curAction]['@value'];
 
       //vérifie s'il faut passer à l'action suivante
       if(curRep == repeatCount){
@@ -138,14 +150,29 @@
           break;     
         case 'setCorItemEval':
           getCalculEmotions();
-          showRoueEmotions();          
+          showRoueEmotions();
+          curRep = 1;         
           break;     
         case 'showResult':
-          
+          setCorrections();
+          getResultEmotions();
           break;     
+        case 'showEnd':
+          showEnd();
+          break;                         
         default:
           break;
       }
+      
+    }
+
+    function showEnd(){
+      clearCarousel();
+      d3.select("#btnValid").style('display','none');
+      d3.select("#carouselRapports").style('display','none');      
+      d3.select("#roueEmotion").style('display','none');      
+      d3.select("#messageEnd").style('display','block')
+        .html('<h1>Merci beaucoup</h1>');
       
     }
 
@@ -153,44 +180,78 @@
       $.ajax({
         type: 'GET',
         dataType: 'json',
-        url: urlCalculEmotions+'&id='+idProcess
+        url: urlCalculEmotions+'&process='+idProcess+'&action='+itemAction['o:id']+'&crible='+<?php echo $idCribleEmo;?>
         }).done(function(data) {
-          console.log(data);
+          //console.log()(data);
           calculEmo = data;
-          medias = [];
-          //construction des medias
-          calculEmo.docs.forEach(d=>medias = medias.concat(d.medias));
-          curItem = calculEmo.docs[0];
+          medias = [], histoDoc=[];
+          //construction des medias sans prendre ceux correspondant à l'itemAction
+          calculEmo.docs.forEach(d=>{
+            if(itemAction['o:id']!=d['o:id']){
+              medias = medias.concat(d.medias);
+              histoDoc.push(d);
+            }
+          });
+          curItem = histoDoc[0];
           changeCarousel();
           changeTexte();
         })
         .fail(function(e) {
-          console.log(e)
+          //console.log()(e)
       });      
     }
 
-    function showRoueEmotions(){
-      if(!roueEmo){
-        d3.select('#evalRangeAll').style('display','none');
-        //roueEmo = new emotionsGeneva({'idCont':'roueEmotion'});
-        roueEmo = new emotionsGeneva({'idCont':'roueEmotion','emos':emos});
-      }
-      if(histoDoc.length){
-        let data = histoDoc[curRep];
-        curItem = data.item;
-        medias = data.medias;
-        changeCarousel();
-        changeTexte();
-      }
+
+    function getResultEmotions(){
+      clearCarousel();
+      $.ajax({
+        type: 'GET',
+        dataType: 'json',
+        url: urlResultEmotions+'&action='+itemAction['o:id']+'&crible='+<?php echo $idCribleEmo;?>
+        }).done(function(data) {
+          //console.log()(data);
+          resultEmo = data;
+          showRoueEmotionsResult();
+        })
+        .fail(function(e) {
+          //console.log()(e)
+      });      
     }
+
+    function afficheEmo(){      
+      curItem = histoDoc[curSlide];
+      changeTexte();
+      //affiche les émotions pour le document
+      roueEmo.showDocEmotion(calculEmo, curItem);
+    }
+
+    function showRoueEmotionsResult(){
+      if(!roueEmo)initRoueEmotion();
+      roueEmo.diagrammeResult(resultEmo);
+    }
+
+    function showRoueEmotions(){
+      if(!roueEmo)initRoueEmotion();
+      clearCarousel();
+    }
+
+    function initRoueEmotion(){
+      d3.select('#evalRangeAll').style('display','none');
+      roueEmo = new emotionsGeneva({'idCont':'roueEmotion'
+        ,'emos':emos
+        ,'clickResult':clickResult
+      });
+            
+    }
+
     function clearEval(){            
       criblesAction.cribles.forEach((d,i)=>{
         document.getElementById('rr_'+i).value=50;
       });
     }
     
-
     function getItemForEval(){            
+      clearCarousel();
       $.ajax({
         type: 'POST',
         dataType: 'json',
@@ -199,7 +260,7 @@
                 'itemSet': itemSet
         }
         }).done(function(data) {
-          //console.log(data)
+          //console.log()(data)
           //enregistre l'historique des datas
           histoDoc.push(data);
           curItem = data.item;
@@ -208,17 +269,24 @@
           changeTexte();
         })
         .fail(function(e) {
-          console.log(e)
+          //console.log()(e)
       });
     }
 
     function changeTexte(){
+      if(!curItem)return;
       d3.select('#txtItem').html(curItem["o:title"]);
     }
 
+    function clearCarousel(){
+      d3.select('.carousel-indicators').selectAll('button').remove();
+      d3.select('.carousel-inner').selectAll('div').remove();  
+      d3.select('#txtItem').html("");
+    }
+
     function changeCarousel(){
+      clearCarousel();
       let indicateurs = d3.select('.carousel-indicators').selectAll('button').data(medias);
-      indicateurs.exit().remove();
       indicateurs.enter().append("button")
         .attr("type","button")
         .attr("data-bs-target","#carouselRapports")
@@ -227,7 +295,6 @@
         .attr("aria-current",true)
         .attr("aria-label",(d,i)=>"Image "+(i+1));
 
-      d3.select('.carousel-inner').selectAll('div').remove();  
       let items = d3.select('.carousel-inner').selectAll('div').data(medias).enter().append("div")
         .attr("class",(d,i)=>i==0 ? "carousel-item active" : "carousel-item");
       items.append('img')
@@ -243,7 +310,8 @@
     }
 
     function setPosi(e){
-      console.log(e);
+      //console.log()(e);
+      if(curSlide<0)curSlide=0;
       let lat=0, lng=0, idC = e.target.id.substring(3);
       //spinner pour patienter
       d3.select('#spin_'+idC).style('display','inline');    
@@ -252,7 +320,6 @@
               lat = coords.latitude;
               lng = coords.longitude;
           }
-
           let val = e.target.value
           , c = criblesAction.cribles[idC]
           , ima = medias[curSlide]
@@ -290,11 +357,9 @@
           })
           let postData = {
                       'json':true,
-                      'rt': 'Position sémantique : sonar',
+                      'rt': 'Position sémantique : Geneva Emotion',
                       'rapports': omk
               };
-          if(actant.id==6)
-            urlAjoutRapports+='&key_identity='+apiId+'&key_credential='+apiKey;
           $.ajax({
               type: 'POST',
               dataType: 'json',
@@ -310,6 +375,148 @@
       });
 
     }
+
+    function setCorrections(e){
+      //console.log()(e);
+      let lat=0, lng=0;
+      //spinner pour patienter
+      //d3.select('#spin_'+idC).style('display','inline');    
+      geo.getPosition(function(coords) {
+          if (coords) {
+              lat = coords.latitude;
+              lng = coords.longitude;
+          }
+
+          let vals = roueEmo.selectEmos
+          , start = new Date()
+          , strDate = start.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })    
+          , omks = [];
+          vals.forEach(function(v, i){
+            let omk = {
+                'dcterms:title':'Corrections '+titreProcess
+                ,'dcterms:isReferencedBy':'cor_'+idProcess+'_'+start.valueOf()
+                ,'jdc:creationDate':start
+                ,'ma:hasCreator':[{'type':'items','value':actant.id}]
+                ,'jdc:hasActant':[{'type':'items','value':actant.id}]
+                ,'schema:actionApplication':[{'type':'items','value':idProcess}]
+                ,'ma:ratingScaleMax':4
+                ,'ma:ratingScaleMin':0
+                ,'ma:hasRatingSystem':[{'type':'items','value':<?php echo $idCribleEmo;?>}]
+                ,'ma:locationLatitude':lat
+                ,'ma:locationLongitude':lng
+                ,'jdc:hasDoc':[]
+                ,'ma:isRatingOf':[]
+                ,'jdc:hasConcept':[]
+                ,'ma:hasRating':[]
+                ,'jdc:distanceConcept':[]
+                ,'jdc:distanceCenter':[]
+                ,'jdc:x':[]
+                ,'jdc:y':[]
+                ,'jdc:degradColors':[]
+            };
+
+            omk['ma:isRatingOf'].push({'type':'items','value':v.idDoc});
+            omk['jdc:hasDoc'].push({'type':'items','value':v.idDoc});
+            omk['jdc:hasConcept'].push({'type':'items','value':v.emo.id});
+            omk['jdc:distanceCenter'].push(v.degre);
+            omk['jdc:degradColors'].push(v.emo.c);
+            omk['jdc:x'].push(v.x);
+            omk['jdc:y'].push(v.y);
+            v.cor.forEach(c=>{
+              omk['jdc:distanceConcept'].push({'type':'items','value':c.data.id});
+              omk['ma:hasRating'].push(c.data.couche);
+            })
+            omks.push(omk);
+          })
+          let postData = {
+                      'json':true,
+                      'rt': 'Position sémantique : Geneva Emotion corrections',
+                      'rapports': omks
+              };
+          $.ajax({
+              type: 'POST',
+              dataType: 'json',
+              url: urlAjoutRapports,
+              data: postData,
+              }).done(function(data) {
+                //console.log()(data);
+                //d3.select('#spin_'+idC).style('display','none');    
+              })
+              .fail(function(e) {
+                //throw new Error("Sauvegarde imposible : " + e);
+                //console.log()(e);
+                //d3.select('#spin_'+idC).style('display','none');    
+              });
+      });
+
+    }
+    function clickResult(e, d){
+      //console.log()()(d);
+      targetResult = {'e':e,'d':d};
+      //
+			let coucheSlt = d3.select(targetResult.e.target)
+      if(coucheSlt.attr('stroke-width')==3){
+        roueEmo.removeDiagrammeChord();
+        coucheSlt.attr('stroke-width',0);
+        clearCarousel();
+        return;
+      }
+
+			d3.selectAll('.coucheStatEmo').attr('stroke-width',0);
+      coucheSlt.attr('stroke-width',3).attr('stroke','white');      
+
+      //consruction de la liste les docs
+      let docs=[];
+      switch (targetResult.e.target.parentElement.className.baseVal) {
+        case 'Evaluations':
+          //uniquement les évaluations          
+          d.data.process.forEach(p=>docs=Array.from(d3.union(docs,p.docs)));
+          break;
+        case 'Corrections':
+          //uniquement les corrections
+          docs = Array.from(d3.group(d.data.cor, d => d.docs).keys());
+          break;
+        default:
+          //tous les documents
+          let docsProcess=[];
+          d.data.process.forEach(p=>docsProcess=Array.from(d3.union(docsProcess,p.docs)));
+          docs = Array.from(d3.union(
+            docsProcess
+            , Array.from(d3.group(d.data.cor, d => d.docs).keys())
+            )); 
+          break;
+      }
+      //console.log()(docs);
+
+
+      //récupère les documents liées aux résultats      
+      $.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: urlResultItems,
+        data: {'docs':docs},
+        }).done(function(data) {
+          histoDoc = data.items;          
+          medias = data.medias;
+          curItem = histoDoc[0];
+          changeCarousel();
+          changeTexte();
+        })
+        .fail(function(e) {
+          //throw new Error("Sauvegarde imposible : " + e);
+          //console.log()(e);
+          //d3.select('#spin_'+idC).style('display','none');    
+      });
+
+    }
+
+    function afficheResult(){      
+      curItem = histoDoc[curSlide];
+      changeTexte();
+      //affiche les résultats pour le document
+      if(targetResult)roueEmo.showDocResult(targetResult,curItem);
+    }
+
 
 </script>  
 <?php echo $this->partial('polemika/modal-wait');?>

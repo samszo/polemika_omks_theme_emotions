@@ -26,6 +26,8 @@ class pageUrls extends AbstractHelper
             $urls["ajoutRapport"] = $urlAjax."&type=ajoutRapport";
             $urls["aleaItem"] = $urlAjax."&type=aleaItem";
             $urls["calculEmotions"] = $urlAjax."&type=calculEmotions";                                    
+            $urls["resultEmotions"] = $urlAjax."&type=resultEmotions";                                    
+            $urls["resultItems"] = $urlAjax."&type=resultItems";
         }        
         $urls["autoComplete"] .= "&sort_by=title"
                 ."&property[0][type]=in&property[0][text]=";        
